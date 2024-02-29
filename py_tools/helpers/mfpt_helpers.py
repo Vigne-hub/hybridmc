@@ -29,15 +29,15 @@ q_cut = 0.5
 Verbose_Convergence = True
 Verbose_Bootstrap = True
 
-best_val = np.inf
-best_args = None
+#best_val = np.inf
+#best_args = None
 
 import numpy as np
 
 
 def minimize(f, x0, method, jac, ub, lb):
-    global best_args
-    global best_val
+    #global best_args
+    #global best_val
 
     dim = len(x0)
 
@@ -58,25 +58,28 @@ def minimize(f, x0, method, jac, ub, lb):
     # y-coordinate tolerance
     opt.set_xtol_rel(5e-5)
 
-    best_args = np.zeros(dim)
-    best_val = np.inf
+    #best_args = np.zeros(dim)
+    #best_val = np.inf
 
-    try:
-        opt_results = opt.optimize(x0)
-    except:
+
+    opt_results = opt.optimize(x0)
+    if (opt.last_optimize_result() < 0 ):
         print("Failure: result code = ", opt.last_optimize_result())
 
-        print('Trying non-derivative COBYLA routine.')
-        print('opt_results are ', opt.last_optimum_value(), ' = ', best_val)
-        print('current xvalues are ', x0)
-        print('best yvalues are ', best_args)
+        print('Trying non-derivative routine.')
+        #print('opt_results are ', opt.last_optimum_value(), ' = ', best_val)
+        print('current yvalues are ', x0)
+        #print('best yvalues are ', best_args)
         opt2 = nlopt.opt(nlopt.LN_NELDERMEAD, dim)
-        opt2.set_min_objective(obj_f)
+
+        obj_f2 = make_nlopt_f(f,None)
+        opt2.set_min_objective(obj_f2)
         opt2.set_ftol_rel(1e-4)
         opt2.set_xtol_rel(1e-4)
 
-        opt_results = opt2.optimize(best_args)
-
+        x0 = np.zeros(dim)
+        opt_results = opt2.optimize(x0)
+        print('best yvalues after non-derivative routine are ', best_args)
     return opt_results
 
 
@@ -362,9 +365,9 @@ def fpt_write_wrap_stair(name, stair_rc_list):
                  })
 
     t_bonds = data['transient_bonds']
-    p_bonds = data['permanent_bonds']
-    nl_bonds = data['nonlocal_bonds']
-    max_d = data['req_dists']
+    #p_bonds = data['permanent_bonds']
+    #nl_bonds = data['nonlocal_bonds']
+    #max_d = data['req_dists']
     nboot = data['nboot']
     rc_transient = t_bonds[-1][-1]
     rh = data['rh']
@@ -514,8 +517,8 @@ def integrate_spline(x_knot, y_knot):
 
 
 def fun(x, y, x_i):
-    global best_args
-    global best_val
+    #global best_args
+    #global best_val
 
     integral = integrate_spline(x, y)
 
@@ -527,9 +530,9 @@ def fun(x, y, x_i):
 
     f += np.log(integral)
 
-    if f < best_val:
-        best_val = f
-        best_args = np.copy(y)
+    #if f < best_val:
+    #    best_val = f
+    #    best_args = np.copy(y)
 
     # print('f = ', f, ' at y = ', y)
     return f
@@ -584,6 +587,8 @@ def dspline(x_knot, x_input, ind):
         i[1:] -= 1
     else:
         i -= 1
+    if (i[0] == x_knot.size ):
+        print('Error in dspline index')
 
     del_x = x_input - x_knot[i]
     coeff_mat = np.column_stack((db[i], dc[i], dd[i]))
@@ -637,7 +642,7 @@ def minimize_f(x, x_i, y0):
     if BFGS:
         ub = np.full(len(x), 10.0)
         lb = np.full(len(x), -10.0)
-        min_f = minimize(f, y0, method=nlopt.LD_LBFGS, jac=df, ub=None, lb=None)
+        min_f = minimize(f, y0, method=nlopt.LD_LBFGS, jac=df, ub=ub, lb=lb)
     else:
         ub = np.full(len(x), 10.0)
         lb = np.full(len(x), -10.0)
@@ -986,7 +991,10 @@ def find_nearest_value(array, value):
 def find_knots(dist_vec, min_dist, max_dist):
     # print('analyzing ', dist_vec.size, ' distances between ', min_dist, ' and ', max_dist)
     dist_vec.sort()
-
+    if (dist_vec[0] < min_dist):
+        print('Error: minimum is below what is allowed.')
+    elif (dist_vec[-1] > max_dist):
+        print('Error: maximum distance of ', dist_vec[-1], ' is above outer stair', max_dist)
     # delta_x = (max_dist - min_dist) / 20.
     q = 0.
     q_best = 0.

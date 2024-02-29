@@ -267,6 +267,7 @@ def minimize_f(x, x_i, y0):
     else:
         ub = np.full(len(x),10.0)
         lb = np.full(len(x),-10.0)
+        print('Calling COBYLA routine with xknots = ', x, ' yknots = ', y0)
         min_f = minimize(f, y0, method=nlopt.LN_COBYLA, jac=None, ub=ub,lb=lb)
 
 

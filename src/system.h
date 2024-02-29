@@ -32,6 +32,7 @@ class System {
       int ensembleSize;
       std::vector<Molecule> ensemble;
       std::vector<Molecule> nextEnsemble;
+      std::vector<Molecule> trappedEnsemble;
 
       System(unsigned int nbeads)
           : pos(nbeads), vel(nbeads), times(nbeads), counter(nbeads), useEnsemble(false) {}

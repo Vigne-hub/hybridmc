@@ -9,18 +9,109 @@
 // state;
 
 #include "main_helpers.h"
+#include "internalState.h"
+
 double max_time = std::numeric_limits<double>::max();
 
+double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box)
+{
+    //  Check to see if a long trajectory starting from each ensemble state can reach
+    //  the target state in the next layer
+    //
+    int numFails = 0;
+    UpdateConfig update_config;
+    Molecule current(p.nbeads);
+    current.setPositions(sys.pos);
+    std::cout << std::endl << "  Checking ensemble states for frustration: num states is "
+        << sys.ensembleSize << " = " << sys.ensemble.size() << std::endl;
+
+    unsigned int numIter = p.nsteps_max/p.nsteps;
+    unsigned int nsteps = p.nsteps;
+    std::vector<bool> trapped(sys.ensembleSize);
+    sys.trappedEnsemble.clear();
+
+    std::vector<int> goodIndices;
+    for (int e=0;e<sys.ensembleSize;e++){
+        CountBond count_bond = {};
+        sys.pos = sys.ensemble[e].getVec3Positions();
+        init_update_config(sys.pos, update_config, box, p.transient_bonds);
+
+        for (unsigned int i = 0; i < p.nbeads; i++)
+        {
+            sys.times[i] = 0.0;
+            sys.counter[i] = 0.0;
+        }
+
+        for (unsigned int iter = 0; iter < numIter; iter++)
+        {
+            run_trajectory_basic(sys, mt, p, box, update_config,
+                                             count_bond, iter, nsteps, p.del_t);
+        }
+        auto flips = double(count_bond.formed + count_bond.broken);
+
+        if (flips > 0){
+            std::cout << " Ensemble member " << e << " can flip state: flips = " << flips << std::endl;
+            trapped[e] = false;
+            goodIndices.push_back(e); // save index if not trapped
+        } else {
+            numFails++;
+            trapped[e] = true;
+            sys.trappedEnsemble.push_back(sys.ensemble[e]);
+            std::cout << " Ensemble member " << e << " does not reach target in " << numIter
+                << " iterations of time steps " << p.nsteps*numIter << std::endl;
+        }
+    }
+
+    double frustration_factor = double(numFails)/sys.ensembleSize;
+    std::cout << "  Frustration fraction is " <<  frustration_factor << std::endl;
+
+        //
+    // replace trapped states with untrapped states in ensemble
+    //
+    if (frustration_factor > 0.0){
+        std::ofstream frustrationFile("frustration.csv");
+        std::ofstream trappedFile("traps.csv", std::ios_base::app);
+        int s_index = 0;
+        for (int e=0;e<sys.ensembleSize;e++){
+
+              DihedralState dihedrals(sys.ensemble[e]);
+              dihedrals.outputProjections(frustrationFile, trapped[e]);
+
+            if (trapped[e]){
+                dihedrals.outputProjections(trappedFile, trapped[e]);
+                std::cout << " Replacing trapped state " << e << " with untrapped state " << goodIndices[s_index]
+                    << std::endl;
+                sys.ensemble[e] = sys.ensemble[ goodIndices[s_index++] ];
+                if (s_index >= (int )goodIndices.size() ) s_index = 0;
+
+            }
+        }
+    }
+
+
+
+
+    sys.pos = current.getVec3Positions(); // restore position
+    init_update_config(sys.pos, update_config, box, p.transient_bonds);
+
+    for (unsigned int i = 0; i < p.nbeads; i++)
+    {
+        sys.times[i] = 0.0;
+        sys.counter[i] = 0.0;
+    }
+    return frustration_factor;
+
+}
 void checkEnsemble(System &sys, const Box &box, const NonlocalBonds &transient_bonds)
 {
    //std::cout << " In check Ensemble, update_config is " << update_config.config << std::endl;
 
    UpdateConfig test_config;
    double count_bonded = 0.0;
-   for (int i=0;i<sys.ensembleSize;i++)
+   for (int e=0;e<sys.ensembleSize;e++)
    {
-        std::vector<Vec3> pos_i = sys.ensemble[i].getVec3Positions();
-        init_update_config(pos_i, test_config, box, transient_bonds) ;
+        std::vector<Vec3> pos_e = sys.ensemble[e].getVec3Positions();
+        init_update_config(pos_e, test_config, box, transient_bonds) ;
         if (test_config.config == 1) count_bonded += 1.0;
         //std::cout << " Ensemble member " << i << " has config = " << test_config.config << std::endl;
    }
@@ -82,14 +173,20 @@ void initialize_pos(System &sys, Random &mt, const Param &p, const Box &box,
     std::cout << "Reading in input file " << *input_name << std::endl;
     read_input(*input_name, sys.pos);
 
+    init_update_config(sys.pos, update_config, box, p.transient_bonds);
+    init_s(sys.s_bias, t_bonds);
+    double f_factor = 0.0;
     if (sys.useEnsemble)
     {
         sys.ensemble = readMoleculesFromHDF5ByName(input_name->c_str());
         checkEnsemble(sys, box, p.transient_bonds);
+        f_factor = checkFrustration(sys, mt, p, box); // only do if a problem appears?
+        init_update_config(sys.pos, update_config, box, p.transient_bonds);
     }
 
-    init_update_config(sys.pos, update_config, box, p.transient_bonds);
-    init_s(sys.s_bias, t_bonds);
+    if (f_factor > 0.0) std::cerr << "  Note:  frustration exists." << std::endl;
+
+
   } else {
 
     // set flag for random initialization success
@@ -183,6 +280,7 @@ void initialize_system(System &sys, Random &mt, const Param &p, const Box &box,
   add_events_for_all_beads(sys.pos, sys.vel, p.nbeads, p.rh2, p.stair2, box, sys.counter, event_queue, sys.times,
                            cells, p.transient_bonds, p.permanent_bonds,
                            update_config, p.max_nbonds);
+
 }
 
 void run_step(System &sys, const Param &p, const Box &box,
@@ -438,6 +536,23 @@ Config run_trajectory_wl(System &sys, Random &mt, const Param &p,
 
   LOG_DEBUG("run_trajectory_wl");
 
+  if (sys.useEnsemble and (update_config.config == 0) )
+  {
+      //std::cout << "  Doing swap MC move. " << std::endl;
+      swapMC(sys, mt, box, p);
+      UpdateConfig trial_config = config_int(sys.pos, box, p.transient_bonds);
+      if (trial_config.config != update_config.config)
+      {
+
+        std::ostringstream errorMessage;
+        errorMessage << "Possible error with swap move. State is " << trial_config.config
+                     << " and was " << update_config.config << std::endl;
+
+          throw std::runtime_error(errorMessage.str());
+      }
+  }
+
+
   for (unsigned int step = iter_wl * p.nsteps_wl; step < (iter_wl + 1) * p.nsteps_wl; step++) {
 
     EventQueue event_queue;
@@ -475,6 +590,42 @@ Config run_trajectory_wl(System &sys, Random &mt, const Param &p,
   return update_config.config;
 }
 
+
+void run_trajectory_basic(System &sys, Random &mt, const Param &p,
+                         const Box &box, UpdateConfig &update_config,
+                         CountBond &count_bond,
+                         unsigned int iter, unsigned int nsteps, double dt) {
+
+
+  for (unsigned int step = iter * nsteps; step < (iter + 1) * nsteps; step++) {
+
+    EventQueue event_queue;
+    Cells cells{p.ncell, p.length / p.ncell};
+
+    //set max time
+    if (step != 0) {max_time = (step * dt) + 0.001;}
+
+    initialize_system(sys, mt, p, box, update_config, cells, event_queue);
+
+    const double tot_E_before =
+        compute_hamiltonian(sys.vel, sys.s_bias, update_config.config, p.m);
+
+    run_step(sys, p, box, update_config, count_bond, cells,
+             event_queue, step, dt);
+
+
+    const double tot_E_during =
+        compute_hamiltonian(sys.vel, sys.s_bias, update_config.config, p.m);
+
+    const double E_diff = std::abs(1 - (tot_E_during / tot_E_before));
+
+    if (E_diff >= 1e-6) {
+      std::cout << E_diff << " energy difference" << std::endl;
+      throw std::runtime_error("energy is not conserved");
+    }
+  }
+
+}
 
 // Wang-Landau algorithm for estimating entropy
 void wang_landau_process(System &sys, Random &mt, const Param &p, const Box &box,

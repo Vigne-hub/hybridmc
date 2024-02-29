@@ -45,8 +45,8 @@ def main(args):
     os.chdir(dir_name)
 
     # Obtain the mfpt for each bonding state
-    mfpt.get_mfpt()
-
+    #mfpt.get_mfpt()
+    mfpt.get_mfpt_serial()
     # put together the mfpts in one file
     mfpt.compile_mfpts()
 

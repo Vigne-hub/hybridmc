@@ -22,6 +22,8 @@ public:
 
     ~Molecule() { n=0; positions.clear(); }
 
+    int getSize() const { return n; }
+
     void setPositions(const std::vector<std::vector<double>>& pos) {
         positions = pos;
     }

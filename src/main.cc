@@ -189,7 +189,10 @@ int main(int argc, char *argv[]) {
   double dS_start = sys.s_bias[0] - sys.s_bias[1];
   if (dS_start > 4.5)
   {
-    std::cout << "  Initial dS = " << dS_start << " is suspiciously large after WL routine.  Running WL longer." << std::endl;
+    std::cout << "  Initial dS = " << dS_start << " is suspiciously large after WL routine. " << std::endl;
+    double frustration = checkFrustration(sys, mt, p, box);
+
+    std::cout << "  Running WL longer with frustration factor of " << frustration << std::endl;
     init_update_config(sys.pos, update_config, box, p.transient_bonds);
     for (unsigned int i = 0; i < p.nbeads; i++)
     {
@@ -197,7 +200,15 @@ int main(int argc, char *argv[]) {
         sys.counter[i] = 0.0;
     }
     wang_landau_process(sys, mt, p, box, update_config, count_bond, nstates, sys.s_bias, dist_writer, dist);
-    std::cout << " After repeat, dS is now " << sys.s_bias[0] - sys.s_bias[1] << std::endl;
+    dS_start = sys.s_bias[0] - sys.s_bias[1];
+    std::cout << " After repeat, dS is now " << dS_start << std::endl;
+
+    if (dS_start > 4.5){
+        std::cout << "  dS too large: setting to max start difference " << std::endl;
+        sys.s_bias[0] = 4.5;
+        sys.s_bias[1] = 0.0;
+    }
+
   }
   //
   // Initialize output binary files
