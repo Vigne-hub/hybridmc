@@ -25,41 +25,29 @@ double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box)
     std::cout << std::endl << "  Checking ensemble states for frustration: num states is "
         << sys.ensembleSize << " = " << sys.ensemble.size() << std::endl;
 
-    unsigned int numIter = p.nsteps_max/p.nsteps;
-    unsigned int nsteps = p.nsteps;
+
     std::vector<bool> trapped(sys.ensembleSize);
     sys.trappedEnsemble.clear();
 
     std::vector<int> goodIndices;
     for (int e=0;e<sys.ensembleSize;e++){
-        CountBond count_bond = {};
+
         sys.pos = sys.ensemble[e].getVec3Positions();
         init_update_config(sys.pos, update_config, box, p.transient_bonds);
 
-        for (unsigned int i = 0; i < p.nbeads; i++)
-        {
-            sys.times[i] = 0.0;
-            sys.counter[i] = 0.0;
-        }
+        bool trappedIndicator = run_anneal(sys, mt, p, box);
 
-        for (unsigned int iter = 0; iter < numIter; iter++)
-        {
-            run_trajectory_basic(sys, mt, p, box, update_config,
-                                             count_bond, iter, nsteps, p.del_t);
-        }
-        auto flips = double(count_bond.formed + count_bond.broken);
-
-        if (flips > 0){
-            std::cout << " Ensemble member " << e << " can flip state: flips = " << flips << std::endl;
-            trapped[e] = false;
-            goodIndices.push_back(e); // save index if not trapped
-        } else {
+        if (trappedIndicator){
             numFails++;
             trapped[e] = true;
             sys.trappedEnsemble.push_back(sys.ensemble[e]);
-            std::cout << " Ensemble member " << e << " does not reach target in " << numIter
-                << " iterations of time steps " << p.nsteps*numIter << std::endl;
+            std::cout << " Ensemble member " << e << " does not reach target." << std::endl;
+        } else {
+            std::cout << " Ensemble member " << e << " can flip state" << std::endl;
+            trapped[e] = false;
+            goodIndices.push_back(e); // save index if not trapped
         }
+
     }
 
     double frustration_factor = double(numFails)/sys.ensembleSize;
@@ -590,7 +578,30 @@ Config run_trajectory_wl(System &sys, Random &mt, const Param &p,
   return update_config.config;
 }
 
+bool run_anneal(System &sys, Random &mt, const Param &p, const Box &box)
+{
+    bool found = false;
+    for (unsigned int i = 0; i < p.nbeads; i++){
+            sys.times[i] = 0.0;
+            sys.counter[i] = 0.0;
+    }
+    UpdateConfig update_config;
+    // initialize both members of CountBond struct to 0
+    CountBond count_bond = {};
+    unsigned int numIter = p.nsteps_max/p.nsteps;
+    unsigned int nsteps = p.nsteps;
 
+    for (unsigned int iter = 0; iter < numIter; iter++){
+        run_trajectory_basic(sys, mt, p, box, update_config,
+                                         count_bond, iter, nsteps, p.del_t);
+        auto flips = double(count_bond.formed + count_bond.broken);
+        if (flips > 0) {
+            found = true;
+            return found;
+        }
+    }
+    return found;
+}
 void run_trajectory_basic(System &sys, Random &mt, const Param &p,
                          const Box &box, UpdateConfig &update_config,
                          CountBond &count_bond,

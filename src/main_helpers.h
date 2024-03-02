@@ -23,6 +23,7 @@
 
 void generateEnsemble(System &sys, Random &mt, const Param &p, const Box &box);
 double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box);
+bool run_anneal(System &sys, Random &mt, const Param &p, const Box &box);
 void run_trajectory_basic(System &sys, Random &mt, const Param &p,
                          const Box &box, UpdateConfig &update_config,
                          CountBond &count_bond,
