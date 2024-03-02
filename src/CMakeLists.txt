@@ -14,15 +14,10 @@ target_link_libraries(hybridmc_common PUBLIC ${Boost_LIBRARIES} ${HDF5_LIBRARIES
 
 # create executable called hybridmc that will run main.cc
 add_executable(hybridmc main.cc)
+#add_executable(example import_test.cc)
 # link all the dependancies (common libraries -- hybridmc_common) to hybridmc
 target_link_libraries(hybridmc PRIVATE hybridmc_common)
 
-#--------------------------------------------------------------
-#pybind11 method for making wang landau port:
-pybind11_add_module(wang_landau wang_landau.cc)
-target_link_libraries(wang_landau PRIVATE hybridmc_common)
-target_compile_definitions(wang_landau
-        PRIVATE VERSION_INFO=${EXAMPLE_VERSION_INFO})
 #------------------------------------------------------------
 #stuff for testing
 #add_executable(hybridmc_test hybridmc_test.cc hybridmc_test.cc)
