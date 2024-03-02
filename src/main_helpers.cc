@@ -617,8 +617,8 @@ double compute_transient_dist(System &sys, const Param &p, const Box &box) {
     int bead_j = std::get<1>(t_bond_tuple);
 
     double dx = sys.pos[bead_i].x - sys.pos[bead_j].x;
-    double dy = sys.pos[bead_i].x - sys.pos[bead_j].x;
-    double dz = dx = sys.pos[bead_i].x - sys.pos[bead_j].x;
+    double dy = sys.pos[bead_i].y - sys.pos[bead_j].y;
+    double dz = dx = sys.pos[bead_i].z - sys.pos[bead_j].z;
     box.mindist(dx, dy, dz);
 
     const double dist2 = dx * dx + dy * dy + dz * dz;
@@ -632,35 +632,40 @@ void run_trajectory_anneal(System &sys, Random &mt, Param p,
                          CountBond &count_bond,
                          unsigned int iter, unsigned int nsteps, double dt) {
 
+    double bond_distance = compute_transient_dist(sys, p, box);
+    //std::cout << " Current bond distance is " << bond_distance << std::endl;
+
+    p.set_stairs( bond_distance + 0.0001);
+
+    p.transient_bonds.printBonds();
+
+    for (unsigned int step = iter * nsteps; step < (iter + 1) * nsteps; step++) {
+
+        EventQueue event_queue;
+        Cells cells{p.ncell, p.length / p.ncell};
+
+        //set max time
+        if (step != 0) {max_time = (step * dt) + 0.001;}
 
 
-  for (unsigned int step = iter * nsteps; step < (iter + 1) * nsteps; step++) {
 
-    EventQueue event_queue;
-    Cells cells{p.ncell, p.length / p.ncell};
+        initialize_system(sys, mt, p, box, update_config, cells, event_queue);
 
-    //set max time
-    if (step != 0) {max_time = (step * dt) + 0.001;}
+        const double tot_E_before =
+            compute_hamiltonian(sys.vel, sys.s_bias, update_config.config, p.m);
 
-    p.set_stairs(compute_transient_dist(sys, p, box) + 0.0001);
-
-    initialize_system(sys, mt, p, box, update_config, cells, event_queue);
-
-    const double tot_E_before =
-        compute_hamiltonian(sys.vel, sys.s_bias, update_config.config, p.m);
-
-    run_step(sys, p, box, update_config, count_bond, cells,
-             event_queue, step, dt);
+        run_step(sys, p, box, update_config, count_bond, cells,
+                 event_queue, step, dt);
 
 
-    const double tot_E_during =
-        compute_hamiltonian(sys.vel, sys.s_bias, update_config.config, p.m);
+        const double tot_E_during =
+            compute_hamiltonian(sys.vel, sys.s_bias, update_config.config, p.m);
 
-    const double E_diff = std::abs(1 - (tot_E_during / tot_E_before));
+        const double E_diff = std::abs(1 - (tot_E_during / tot_E_before));
 
-    if (E_diff >= 1e-6) {
-      std::cout << E_diff << " energy difference" << std::endl;
-      throw std::runtime_error("energy is not conserved");
+        if (E_diff >= 1e-6) {
+          std::cout << E_diff << " energy difference" << std::endl;
+          throw std::runtime_error("energy is not conserved");
     }
   }
 
