@@ -32,6 +32,10 @@ double NonlocalBonds::getrc(unsigned int bond_index) const {
     return std::sqrt(std::get<2>(ij_[bond_index]));
 }
 
+void NonlocalBonds::setrc(unsigned int bond_index, const double new_rc) {
+    std::get<2>(ij_[bond_index]) = new_rc * new_rc;
+}
+
 std::tuple<Config, double> NonlocalBonds::get_bond_mask(unsigned int i, unsigned int j) const {
     assert(j > i);
 

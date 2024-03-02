@@ -33,6 +33,11 @@ struct Param {
   double rh;
   // smallest bond length squared between nonlocal beads
   double rh2;
+
+  // target distance for transient bond and this value squared
+  double rc_target;
+  double rc_target2;
+
   // edge of previous stair in staircase potential of transient bond
   std::optional<double> stair;
   std::optional<double> stair2;
@@ -105,6 +110,15 @@ struct Param {
   int ensembleSize;
   // step at which to write configuration to ensemble
   unsigned int ensemble_write_step;
+
+  void set_stairs(double new_stair_val){
+
+          if (stair.has_value()){
+              stair = new_stair_val;
+              stair2 = new_stair_val * new_stair_val;
+          }
+  };
+
 };
 
 #endif

@@ -22,12 +22,17 @@
 #include <numeric>
 
 void generateEnsemble(System &sys, Random &mt, const Param &p, const Box &box);
+
 double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box);
+
 bool run_anneal(System &sys, Random &mt, const Param &p, const Box &box);
-void run_trajectory_basic(System &sys, Random &mt, const Param &p,
+
+void run_trajectory_anneal(System &sys, Random &mt, Param p,
                          const Box &box, UpdateConfig &update_config,
                          CountBond &count_bond,
                          unsigned int iter, unsigned int nsteps, double dt);
+
+double compute_transient_dist2(System &sys, Param &p, Box &box);
 
 void initialize_pos(System &sys, Random &mt, const Param &p, const Box &box,
                     UpdateConfig &update_config,

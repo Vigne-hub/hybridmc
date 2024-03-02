@@ -76,9 +76,6 @@ double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box)
         }
     }
 
-
-
-
     sys.pos = current.getVec3Positions(); // restore position
     init_update_config(sys.pos, update_config, box, p.transient_bonds);
 
@@ -585,6 +582,14 @@ bool run_anneal(System &sys, Random &mt, const Param &p, const Box &box)
             sys.times[i] = 0.0;
             sys.counter[i] = 0.0;
     }
+
+    // make a local copy of p to modify
+    Param p_local = p;
+    // set the transient bond to be the target rc for this bond squared
+    p_local.transient_bonds.setrc(0, p.rc_target);
+    // for debugging print the transient bonds
+    p_local.transient_bonds.printBonds();
+
     UpdateConfig update_config;
     // initialize both members of CountBond struct to 0
     CountBond count_bond = {};
@@ -592,7 +597,7 @@ bool run_anneal(System &sys, Random &mt, const Param &p, const Box &box)
     unsigned int nsteps = p.nsteps;
 
     for (unsigned int iter = 0; iter < numIter; iter++){
-        run_trajectory_basic(sys, mt, p, box, update_config,
+        run_trajectory_anneal(sys, mt, p_local, box, update_config,
                                          count_bond, iter, nsteps, p.del_t);
         auto flips = double(count_bond.formed + count_bond.broken);
         if (flips > 0) {
@@ -602,10 +607,31 @@ bool run_anneal(System &sys, Random &mt, const Param &p, const Box &box)
     }
     return found;
 }
-void run_trajectory_basic(System &sys, Random &mt, const Param &p,
+
+
+double compute_transient_dist(System &sys, const Param &p, const Box &box) {
+
+    std::tuple<unsigned int, unsigned int, double> t_bond_tuple = p.transient_bonds.getBond(0);
+
+    int bead_i = std::get<0>(t_bond_tuple);
+    int bead_j = std::get<1>(t_bond_tuple);
+
+    double dx = sys.pos[bead_i].x - sys.pos[bead_j].x;
+    double dy = sys.pos[bead_i].x - sys.pos[bead_j].x;
+    double dz = dx = sys.pos[bead_i].x - sys.pos[bead_j].x;
+    box.mindist(dx, dy, dz);
+
+    const double dist2 = dx * dx + dy * dy + dz * dz;
+
+    return std::sqrt(dist2);
+
+}
+
+void run_trajectory_anneal(System &sys, Random &mt, Param p,
                          const Box &box, UpdateConfig &update_config,
                          CountBond &count_bond,
                          unsigned int iter, unsigned int nsteps, double dt) {
+
 
 
   for (unsigned int step = iter * nsteps; step < (iter + 1) * nsteps; step++) {
@@ -615,6 +641,8 @@ void run_trajectory_basic(System &sys, Random &mt, const Param &p,
 
     //set max time
     if (step != 0) {max_time = (step * dt) + 0.001;}
+
+    p.set_stairs(compute_transient_dist(sys, p, box) + 0.0001);
 
     initialize_system(sys, mt, p, box, update_config, cells, event_queue);
 
@@ -685,7 +713,8 @@ void from_json(const nlohmann::json &json, Param &p) {
     p.nnear_max2 = p.nnear_max * p.nnear_max;
     p.rh = json["rh"];
     p.rh2 = p.rh * p.rh;
-
+    p.rc_target = json["rc_target"];
+    p.rc_target2 = p.rc_target * p.rc_target;
     // if stair var is not false aka 0
     if (json.count("stair") != 0) {
         p.stair = json["stair"];
