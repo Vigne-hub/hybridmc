@@ -40,6 +40,9 @@ def run_layer(common_data, in_queue, out_queue, seed_increment, exe):
         # Define the output files identifier for this transition (used to name hdf5 files, json files and log files)
         output_name = f'hybridmc_{layer}_{format_bits(bits_in)}_{format_bits(bits_out)}'
 
+        # Set the target rc to be the final rc for the bond to be formed in this trajectory
+        common_data['rc_target'] = common_data['nonlocal_bonds'][i][2]
+
         # Set the transient bond to form this trajectory
         common_data['transient_bonds'] = [common_data['nonlocal_bonds'][i]]
 
@@ -64,7 +67,7 @@ def run_layer(common_data, in_queue, out_queue, seed_increment, exe):
 
                 # ensure cell size can accommodate the rc
                 if (common_data["length"] / common_data["ncell"]) < stair_rc_list[0]:
-                    common_data["length"] = stair_rc_list[0] * common_data["ncell"] + 0.1
+                    common_data["length"] = stair_rc_list[0] * common_data["ncell"] + 1.0
 
                 run_stairs(common_data, input_hdf5, output_name, exe, stair_rc_list)
 

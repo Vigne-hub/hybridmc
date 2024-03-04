@@ -230,7 +230,7 @@ if catboost:
     # Create a CatBoost Pool object
     train_pool = Pool(X_train, label=y_train)
 
-    catboost_classifier = CatBoostClassifier(iterations=1000,  # Number of trees (boosting iterations)
+    catboost_classifier = CatBoostClassifier(iterations=5000,  # Number of trees (boosting iterations)
                                              learning_rate=0.1,  # Learning rate
                                              depth=8,  # Depth of the trees
                                              loss_function='Logloss',  # Loss function for binary classification

@@ -53,9 +53,13 @@ double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box)
     double frustration_factor = double(numFails)/sys.ensembleSize;
     std::cout << "  Frustration fraction is " <<  frustration_factor << std::endl;
 
-        //
+    //
     // replace trapped states with untrapped states in ensemble
     //
+    if (frustration_factor == 1.0){
+	throw std::runtime_error("No states in ensemble reach the target.");
+    }
+
     if (frustration_factor > 0.0){
         std::ofstream frustrationFile("frustration.csv");
         std::ofstream trappedFile("traps.csv", std::ios_base::app);
@@ -75,9 +79,6 @@ double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box)
             }
         }
     }
-
-
-
 
     sys.pos = current.getVec3Positions(); // restore position
     init_update_config(sys.pos, update_config, box, p.transient_bonds);
@@ -580,59 +581,108 @@ Config run_trajectory_wl(System &sys, Random &mt, const Param &p,
 
 bool run_anneal(System &sys, Random &mt, const Param &p, const Box &box)
 {
-    bool found = false;
+    bool trapped = true;
     for (unsigned int i = 0; i < p.nbeads; i++){
             sys.times[i] = 0.0;
             sys.counter[i] = 0.0;
     }
+
+    // make a local copy of p to modify
+    Param p_local = p;
+    // set the transient bond to be the target rc for this bond squared
+    p_local.transient_bonds.setrc(0, p.rc_target);
+
+    double bond_distance = compute_transient_dist(sys, p_local, box) + 0.001;
+    std::cout << " starting ensemble with distance = " << bond_distance << std::endl;
+    p_local.stair = bond_distance;
+    p_local.stair2 = bond_distance*bond_distance;
+
+
     UpdateConfig update_config;
+    init_update_config(sys.pos, update_config, box, p.transient_bonds);
+    if (update_config.config == 1){
+        //std::cout << " Initial configuration is already in bound state." << std::endl;
+	return false;
+    }
     // initialize both members of CountBond struct to 0
     CountBond count_bond = {};
     unsigned int numIter = p.nsteps_max/p.nsteps;
     unsigned int nsteps = p.nsteps;
 
     for (unsigned int iter = 0; iter < numIter; iter++){
-        run_trajectory_basic(sys, mt, p, box, update_config,
+        run_trajectory_anneal(sys, mt, p_local, box, update_config,
                                          count_bond, iter, nsteps, p.del_t);
+
+	//std::cout << " After iter " << iter << " of " << numIter << " bonds formed is " << count_bond.formed << std::endl;
+
         auto flips = double(count_bond.formed + count_bond.broken);
         if (flips > 0) {
-            found = true;
-            return found;
+            std::cout << " Found the target in iteration " << iter << std::endl;
+            trapped = false;
+            return trapped;
         }
     }
-    return found;
+    return trapped;
 }
-void run_trajectory_basic(System &sys, Random &mt, const Param &p,
+
+
+double compute_transient_dist(System &sys, const Param &p, const Box &box) {
+
+    std::tuple<unsigned int, unsigned int, double> t_bond_tuple = p.transient_bonds.getBond(0);
+
+    int bead_i = std::get<0>(t_bond_tuple);
+    int bead_j = std::get<1>(t_bond_tuple);
+
+    double dx = sys.pos[bead_i].x - sys.pos[bead_j].x;
+    double dy = sys.pos[bead_i].y - sys.pos[bead_j].y;
+    double dz = sys.pos[bead_i].z - sys.pos[bead_j].z;
+    box.mindist(dx, dy, dz);
+
+    const double dist2 = dx * dx + dy * dy + dz * dz;
+
+    return std::sqrt(dist2);
+
+}
+
+void run_trajectory_anneal(System &sys, Random &mt, Param &p,
                          const Box &box, UpdateConfig &update_config,
                          CountBond &count_bond,
                          unsigned int iter, unsigned int nsteps, double dt) {
 
-
-  for (unsigned int step = iter * nsteps; step < (iter + 1) * nsteps; step++) {
-
-    EventQueue event_queue;
-    Cells cells{p.ncell, p.length / p.ncell};
-
-    //set max time
-    if (step != 0) {max_time = (step * dt) + 0.001;}
-
-    initialize_system(sys, mt, p, box, update_config, cells, event_queue);
-
-    const double tot_E_before =
-        compute_hamiltonian(sys.vel, sys.s_bias, update_config.config, p.m);
-
-    run_step(sys, p, box, update_config, count_bond, cells,
-             event_queue, step, dt);
+    double bond_distance = compute_transient_dist(sys, p, box) + 0.1;
+    if (p.stair > bond_distance and bond_distance > p.rc_target){
+            p.stair = bond_distance;
+            p.stair2 = bond_distance*bond_distance;
+    }
 
 
-    const double tot_E_during =
-        compute_hamiltonian(sys.vel, sys.s_bias, update_config.config, p.m);
+    init_update_config(sys.pos, update_config, box, p.transient_bonds);
 
-    const double E_diff = std::abs(1 - (tot_E_during / tot_E_before));
+    for (unsigned int step = iter * nsteps; step < (iter + 1) * nsteps; step++) {
 
-    if (E_diff >= 1e-6) {
-      std::cout << E_diff << " energy difference" << std::endl;
-      throw std::runtime_error("energy is not conserved");
+        EventQueue event_queue;
+        Cells cells{p.ncell, p.length / p.ncell};
+
+        //set max time
+        if (step != 0) {max_time = (step * dt) + 0.001;}
+
+        initialize_system(sys, mt, p, box, update_config, cells, event_queue);
+
+        const double tot_E_before =
+            compute_hamiltonian(sys.vel, sys.s_bias, update_config.config, p.m);
+
+        run_step(sys, p, box, update_config, count_bond, cells,
+                 event_queue, step, dt);
+
+
+        const double tot_E_during =
+            compute_hamiltonian(sys.vel, sys.s_bias, update_config.config, p.m);
+
+        const double E_diff = std::abs(1 - (tot_E_during / tot_E_before));
+
+        if (E_diff >= 1e-6) {
+          std::cout << E_diff << " energy difference" << std::endl;
+          throw std::runtime_error("energy is not conserved");
     }
   }
 
@@ -685,7 +735,8 @@ void from_json(const nlohmann::json &json, Param &p) {
     p.nnear_max2 = p.nnear_max * p.nnear_max;
     p.rh = json["rh"];
     p.rh2 = p.rh * p.rh;
-
+    p.rc_target = json["rc_target"];
+    p.rc_target2 = p.rc_target * p.rc_target;
     // if stair var is not false aka 0
     if (json.count("stair") != 0) {
         p.stair = json["stair"];

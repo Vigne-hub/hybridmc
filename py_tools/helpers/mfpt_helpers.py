@@ -34,6 +34,19 @@ Verbose_Bootstrap = True
 
 import numpy as np
 
+#Define a fallback optimizer in case of exception
+def fallback_optimizer(f, jac, x_init, lb, ub):
+	opt = nlopt.opt(nlopt.LN_BOBYQA, len(x_init))
+	obj_f = make_nlopt_f(f, jac)
+	opt.set_min_objective(obj_f)
+	if ub is not None:
+		opt.set_upper_bounds(ub)
+	if lb is not None:
+		opt.set_lower_bounds(lb)
+
+	opt.set_xtol_rel(1e-4)
+	opt_results = opt.optimize(x_init)
+	return opt_results
 
 def minimize(f, x0, method, jac, ub, lb):
     #global best_args
@@ -41,45 +54,41 @@ def minimize(f, x0, method, jac, ub, lb):
 
     dim = len(x0)
 
-    opt = nlopt.opt(method, dim)
-    obj_f = make_nlopt_f(f, jac)
-    opt.set_min_objective(obj_f)
+    try: 
+        opt = nlopt.opt(method, dim)
+        obj_f = make_nlopt_f(f, jac)
+        opt.set_min_objective(obj_f)
 
-    if ub is not None:
-        opt.set_upper_bounds(ub)
+        if ub is not None:
+            opt.set_upper_bounds(ub)
 
-    if lb is not None:
-        opt.set_lower_bounds(lb)
+        if lb is not None:
+            opt.set_lower_bounds(lb)
 
-    # stopping criteria
-    #
-    # function tolerance
-    opt.set_ftol_rel(5e-5)
-    # y-coordinate tolerance
-    opt.set_xtol_rel(5e-5)
-
-    #best_args = np.zeros(dim)
-    #best_val = np.inf
+        # stopping criteria
+        #
+        # function tolerance
+        opt.set_ftol_rel(5e-5)
+        # y-coordinate tolerance
+        opt.set_xtol_rel(5e-5)
 
 
-    opt_results = opt.optimize(x0)
-    if (opt.last_optimize_result() < 0 ):
-        print("Failure: result code = ", opt.last_optimize_result())
 
-        print('Trying non-derivative routine.')
-        #print('opt_results are ', opt.last_optimum_value(), ' = ', best_val)
-        print('current yvalues are ', x0)
-        #print('best yvalues are ', best_args)
-        opt2 = nlopt.opt(nlopt.LN_NELDERMEAD, dim)
+        opt_results = opt.optimize(x0)
 
-        obj_f2 = make_nlopt_f(f,None)
-        opt2.set_min_objective(obj_f2)
-        opt2.set_ftol_rel(1e-4)
-        opt2.set_xtol_rel(1e-4)
+    except nlopt.RoundoffLimited as e:
+        print("NLopt failed due to roundoff errors. Switching to fallback optimizer.")
+        x0 = np.zeros(dim) 
+        opt_results = fallback_optimizer(f, jac, x0, lb, ub)
+        print("Found minimum using fallback optimizer:", opt_results)  
 
+    except Exception as e:
+        print("NLopt failed due to an unexpected exception:", e)
+        print("Switching to fallback optimizer.")
         x0 = np.zeros(dim)
-        opt_results = opt2.optimize(x0)
-        print('best yvalues after non-derivative routine are ', best_args)
+        opt_results = fallback_optimizer(f, jac, x0, lb, ub)
+        print("Found minimum using fallback optimizer:", opt_results)
+
     return opt_results
 
 

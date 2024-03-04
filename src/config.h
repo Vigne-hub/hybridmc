@@ -41,6 +41,9 @@ public:
   // get rc of bond index'th rc
   double getrc(unsigned int bond_index) const;
 
+  // set rc of bond index'th rc
+  void setrc(unsigned int bond_index, const double new_rc);
+
   // bond mask is obtained -- a configuration and the rc value packaged in a tuple
   std::tuple<Config, double> get_bond_mask(unsigned int i, unsigned int j) const;
 
