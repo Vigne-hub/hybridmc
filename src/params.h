@@ -117,14 +117,7 @@ struct Param {
               stair = new_stair_val;
               stair2 = new_stair_val * new_stair_val;
           }
-  }
-
-  void print_stairs(){
-    if (stair.has_value())
-    {
-      std::cout << " stair = " << stair.value() << " and stair2 = " << stair2.value() << std::endl;
-    }
-  }
+  };
 
 };
 
