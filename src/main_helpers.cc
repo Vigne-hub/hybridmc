@@ -25,6 +25,15 @@ double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box)
     std::cout << std::endl << "  Checking ensemble states for frustration: num states is "
         << sys.ensembleSize << " = " << sys.ensemble.size() << std::endl;
 
+    //  find maximum distance of transient bond in ensemble
+    double max_init_distance = 0.0;
+    for (int i=0;i<sys.ensembleSize;i++){
+        std::vector<Vec3> pos = sys.ensemble[i].getVec3Positions();
+        double d_i = compute_transient_dist(pos, p, box);
+        if (d_i > max_init_distance) max_init_distance = d_i;
+        //std::cout << " initial d_i = " << d_i << " and max = " << max_init_distance << std::endl;
+    }
+
 
     std::vector<bool> trapped(sys.ensembleSize);
     sys.trappedEnsemble.clear();
@@ -35,7 +44,7 @@ double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box)
         sys.pos = sys.ensemble[e].getVec3Positions();
         init_update_config(sys.pos, update_config, box, p.transient_bonds);
 
-        bool trappedIndicator = run_anneal(sys, mt, p, box);
+        bool trappedIndicator = run_anneal(sys, mt, p, box, max_init_distance);
 
         if (trappedIndicator){
             numFails++;
@@ -57,7 +66,7 @@ double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box)
     // replace trapped states with untrapped states in ensemble
     //
     if (frustration_factor == 1.0){
-	throw std::runtime_error("No states in ensemble reach the target.");
+	    throw std::runtime_error("No states in ensemble reach the target.");
     }
 
     if (frustration_factor > 0.0){
@@ -579,48 +588,96 @@ Config run_trajectory_wl(System &sys, Random &mt, const Param &p,
   return update_config.config;
 }
 
-bool run_anneal(System &sys, Random &mt, const Param &p, const Box &box)
+std::vector<double> createUnevenIntervalPoints(int n, double x_min, double x_max) {
+    // Generate a set of n points, starting at x_min and ending at x_max, where they are separated
+    // by 1/sqrt(x)
+    //
+    std::vector<double> points;
+
+    // Step 1: Compute the total integral of 1/sqrt(x) over [x_min, x_max]
+    double total_integral = 2.0 * (sqrt(x_max) - sqrt(x_min));
+
+    // Step 2: Compute the boundaries of each segment
+    for (int i = 1; i < n; ++i) {
+        double ratio = static_cast<double>(i) / n;
+        double boundary = pow((ratio * total_integral / 2.0 + sqrt(x_min)), 2);
+        points.push_back(boundary);
+    }
+
+    // Step 3: Concatenate x_min and x_max with the segment boundaries
+    points.insert(points.begin(), x_min);
+    points.push_back(x_max);
+    //  Now reverse the order
+    std::reverse(points.begin(), points.end());
+
+    return points;
+}
+
+
+bool run_anneal(System &sys, Random &mt, const Param &p, const Box &box, double max_d)
 {
     bool trapped = true;
     for (unsigned int i = 0; i < p.nbeads; i++){
             sys.times[i] = 0.0;
             sys.counter[i] = 0.0;
     }
+    //
+    // initialize both members of CountBond struct to 0
+    CountBond count_bond = {};
+    unsigned int numIter = p.nsteps_max/p.nsteps;
+    unsigned int nsteps = p.nsteps;
+
 
     // make a local copy of p to modify
     Param p_local = p;
     // set the transient bond to be the target rc for this bond squared
     p_local.transient_bonds.setrc(0, p.rc_target);
 
-    double bond_distance = compute_transient_dist(sys, p_local, box) + 0.001;
-    std::cout << " starting ensemble with distance = " << bond_distance << std::endl;
-    p_local.stair = bond_distance;
-    p_local.stair2 = bond_distance*bond_distance;
+    //  Annealing schedule: follow 1/sqrt(x) scheme for interval
+    std::vector<double> current_outer_rc = createUnevenIntervalPoints(numIter, p.rc_target + 0.1, max_d + 0.1);
+
+    //double bond_distance_i = compute_transient_dist(sys, p, box);
+    //std::cout << " starting ensemble with outer distance = " << current_outer_rc[rc_index] << "  initial d = " << bond_distance_i << std::endl;
+
+    unsigned int rc_index = 0;
+    p_local.stair = current_outer_rc[rc_index];
+    p_local.stair2 = current_outer_rc[rc_index] * current_outer_rc[rc_index];
 
 
     UpdateConfig update_config;
-    init_update_config(sys.pos, update_config, box, p.transient_bonds);
+    init_update_config(sys.pos, update_config, box, p_local.transient_bonds);
     if (update_config.config == 1){
-        //std::cout << " Initial configuration is already in bound state." << std::endl;
-	return false;
+        std::cout << " Initial configuration is already in bound state." << std::endl;
+	    return false;
     }
-    // initialize both members of CountBond struct to 0
-    CountBond count_bond = {};
-    unsigned int numIter = p.nsteps_max/p.nsteps;
-    unsigned int nsteps = p.nsteps;
 
     for (unsigned int iter = 0; iter < numIter; iter++){
-        run_trajectory_anneal(sys, mt, p_local, box, update_config,
+
+      double bond_distance = compute_transient_dist(sys, p_local, box);
+      // check to verify that the bond distance is not greater than next value of rc in annealing list
+      if (bond_distance < current_outer_rc[rc_index+1]){
+        // Move outer wall in
+        rc_index++;
+        if (rc_index >= numIter -1 ) rc_index = numIter-2;
+
+        p_local.stair = current_outer_rc[rc_index];
+        p_local.stair2 = current_outer_rc[rc_index] * current_outer_rc[rc_index];
+        //std::cout << " Current outer rc is " << current_outer_rc[rc_index] << " d = " << bond_distance << std::endl;
+      }
+
+
+      // run trajectory for nsteps with timestep dt
+      run_trajectory_anneal(sys, mt, p_local, box, update_config,
                                          count_bond, iter, nsteps, p.del_t);
 
 	//std::cout << " After iter " << iter << " of " << numIter << " bonds formed is " << count_bond.formed << std::endl;
 
-        auto flips = double(count_bond.formed + count_bond.broken);
-        if (flips > 0) {
+      auto flips = double(count_bond.formed + count_bond.broken);
+      if (flips > 0) {
             std::cout << " Found the target in iteration " << iter << std::endl;
             trapped = false;
             return trapped;
-        }
+      }
     }
     return trapped;
 }
@@ -644,16 +701,29 @@ double compute_transient_dist(System &sys, const Param &p, const Box &box) {
 
 }
 
+double compute_transient_dist(std::vector<Vec3> &pos, const Param &p, const Box &box) {
+
+    std::tuple<unsigned int, unsigned int, double> t_bond_tuple = p.transient_bonds.getBond(0);
+
+    int bead_i = std::get<0>(t_bond_tuple);
+    int bead_j = std::get<1>(t_bond_tuple);
+
+    double dx = pos[bead_i].x - pos[bead_j].x;
+    double dy = pos[bead_i].y - pos[bead_j].y;
+    double dz = pos[bead_i].z - pos[bead_j].z;
+    box.mindist(dx, dy, dz);
+
+    const double dist2 = dx * dx + dy * dy + dz * dz;
+
+    return std::sqrt(dist2);
+
+}
+
+
 void run_trajectory_anneal(System &sys, Random &mt, Param &p,
                          const Box &box, UpdateConfig &update_config,
                          CountBond &count_bond,
                          unsigned int iter, unsigned int nsteps, double dt) {
-
-    double bond_distance = compute_transient_dist(sys, p, box) + 0.1;
-    if (p.stair > bond_distance and bond_distance > p.rc_target){
-            p.stair = bond_distance;
-            p.stair2 = bond_distance*bond_distance;
-    }
 
 
     init_update_config(sys.pos, update_config, box, p.transient_bonds);
