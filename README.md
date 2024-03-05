@@ -1,7 +1,8 @@
 # HybridMC: Hybrid Monte Carlo Protein Folding
 
-[![build workflow status](https://github.com/margaritacolberg/hybridmc/actions/workflows/build.yml/badge.svg)](https://github.com/margaritacolberg/hybridmc/actions/workflows/build.yml?query=branch:main)
-[![format workflow status](https://github.com/margaritacolberg/hybridmc/actions/workflows/format.yml/badge.svg)](https://github.com/margaritacolberg/hybridmc/actions/workflows/format.yml?query=branch:main)
+[![Anaconda-Server Badge](https://anaconda.org/vignesh229/hybridmc/badges/version.svg)](https://anaconda.org/vignesh229/hybridmc)
+[![Anaconda-Server Badge](https://anaconda.org/vignesh229/hybridmc/badges/platforms.svg)](https://anaconda.org/vignesh229/hybridmc)
+[![Publish Conda Package on Linux](https://github.com/Vigne-hub/hybridmc/actions/workflows/conda_publish_linux.yml/badge.svg)](https://github.com/Vigne-hub/hybridmc/actions/workflows/conda_publish_linux.yml)
 
 HybridMC simulates the event-driven dynamics of coarse-grained protein folding.
 The entropy and mean first passage times (MFPT) of each bond forming or
@@ -23,14 +24,21 @@ complicated.
   * `examples`: JSON inputs which specify protein configuration and Bash
     scripts for running HybridMC
 
-  * `tools`: Python scripts for running HybridMC and extracting data such as
+  * `py_tools`: Python module with some utilituy functions to automate running HybridMC and extracting data such as
     the MFPT
+
+  * `py_bin`: Python scripts for running HybridMC
 
   * `tree`: C++ and Bash scripts for generating tree plots
 
   * `crambin_s_bias_mfpt`: biased entropy and MPFT results for crambin
 
-## C++ Program Details
+## Installing Package
+
+This package can be installed using **`conda install hybridmc -c conda-forge -c vignesh229`** to directly obtain a command called **hmc_run** which can be used simply as **`hmc_run --json INPUT_JSON_FILE`**. This also installs all the python utilities that can be imported from a python shell.
+
+## C++ Program Details for Manual Install
+**NOTE:** This is not the recommended approach, proceeed to use this with caution.
 
 ### Prerequisite Software
 
@@ -52,10 +60,10 @@ complicated.
 
 All of these can be obtained through the conda environment yaml file: hybridmc.yaml
 
-To create the conda environment, run
+You can get these within a conda environment by running:
 
 ```
-conda env create -f hybridmc.yaml
+conda install cmake hdf5 ninja cxx-compiler boost -c conda-forge
 ```
 
 ### Commands for Compiling
@@ -142,6 +150,8 @@ have the following parameters:
 
     "gamma_f": 0.001, -- final adjustment factor for wang landau
 
+    "gamma_f_screening": 0.0005, -- wang landau screening adjustment factor
+
     "seeds": [3, 1], -- seeds for random number generator
 
     "temp": 1.0, -- temperature
@@ -152,9 +162,9 @@ have the following parameters:
     
     "total_iter_eq": 100, -- total number of iterations for equilibration
 
-    "pos_scale": 0.5, --
+    "pos_scale": 0.5,
 
-    "neg_scale": 0.1, --
+    "neg_scale": 0.1,
 
     "sig_level": 0.05, -- significance level for the g-test
 
@@ -166,18 +176,25 @@ have the following parameters:
 
     "fail_max": 5, -- maximum number of times to fail to find a valid configuration before increasing the numebr of iterations
 
-    "WL_sbias": 6.0 -- the sbias value for a wang landau simulation result beyond which a configuration is deemed to need staircasing 
+    "WL_sbias": 6.0, -- the sbias value for a wang landau simulation result beyond which a configuration is deemed to need staircasing 
 
-    "req_dists": 50000 -- minimum distances used for MFPT. Enforced in the hybridmc c++ source: it is a convergence criterion.
+    "req_dists": 50000, -- minimum distances used for MFPT. Enforced in the hybridmc c++ source: it is a convergence criterion.
 
-    "rc_target_min_percentile": 0.025 -- Determines the lcoation of rc for the stair. Look at 2.5 percentile rc value from the rc explored
+    "rc_target_min_percentile": 0.025, -- Determines the lcoation of rc for the stair. Look at 2.5 percentile rc value from the rc explored
                                             during simulation.
 
-    "D_mean": 0.046 -- Estimated diffusion coefficent mean value. Used for rate calculation.
+    "D_mean": 0.046, -- Estimated diffusion coefficent mean value. Used for rate calculation.
     
-    "D_std_perc": 1 -- Assumed % error in D_mean.
+    "D_std_perc": 1, -- Assumed % error in D_mean.
 
-    "eps": 3 -- The energy of the bond in kT units. Used to calculate reates and probability.
+    "eps": 3, -- The energy of the bond in kT units. Used to calculate reates and probability.
+
+    "useEnsemble": false, -- Experimental feature switch: swapping states during initialization
+    
+    "ensembleSize": 100, -- If use enemble how many states to choose from
+    
+    "ensemble_write_step": 10 -- If use ensemble, steps after which to swap in new state
+
 }
 
 ### Calculate Entropy
@@ -192,6 +209,10 @@ To find which transition gives smallest entropy difference, use
 `min_diff_s_bias.py`. To get percent error for the entropy of one transition,
 use `get_error_s_bias.py`.
 
+In addition, an output for a state function check if provided for the diff_s_bias (diff_check.csv)
+with information about if the direct path value is significantly different
+than an average value using multiple paths for the same transition.
+
 ### Calculate MFPT
 
 To calculate MFPT for a single transition manually, use `mfpt.py`. To calculate MFPT for
@@ -200,12 +221,6 @@ step of staircase into a single MFPT for the transition, use
 `mfpt_for_stair.py`.
 
 Again, as with the entropy, this is done automatically when run.py is executed.
-
-### Rerun Files
-
-To move JSON and HDF5 files needed for rerunning transitions to rerun dir, use
-`get_rerun_files.py`. To rerun files that were moved to rerun dir, use
-`rerun.py`.
 
 ### Calculate Energy and Folding Time
 
