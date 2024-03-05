@@ -255,6 +255,16 @@ class DihedralState
 
         }
 
+        void outputInternalAngles(std::ofstream &out, bool frustrated = false)
+        {
+            for (auto bond_angle : bond_angles) out << bond_angle << ",";
+
+            for (auto dihedral : dihedrals) out << cos(M_PI*dihedral)
+                << "," << sin(M_PI*dihedral) << ",";
+            out << frustrated << std::endl;
+
+        }
+
         void addAngles(const DihedralState &otherSet)
         {
              

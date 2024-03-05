@@ -22,7 +22,11 @@
 #include <numeric>
 #include <algorithm>
 
+std::string extractBaseName(const std::string& filename);
+
 std::vector<double> createUnevenIntervalPoints(int n, double x_min, double x_max);
+
+void writeFrustratedConfigurations(const System &sys, std::string h5_name);
 
 void generateEnsemble(System &sys, Random &mt, const Param &p, const Box &box);
 

@@ -13,6 +13,8 @@
 
 class System {
   public:
+      //
+      int numAtoms;
       // positions of all beads at time t
       std::vector<Vec3> pos;
       // velocities of all beads at time t
@@ -33,9 +35,10 @@ class System {
       std::vector<Molecule> ensemble;
       std::vector<Molecule> nextEnsemble;
       std::vector<Molecule> trappedEnsemble;
+      std::vector<bool> trapped; // flag to classify each member of "ensemble" as trapped or not
 
       System(unsigned int nbeads)
-          : pos(nbeads), vel(nbeads), times(nbeads), counter(nbeads), useEnsemble(false) {}
+          : numAtoms(nbeads), pos(nbeads), vel(nbeads), times(nbeads), counter(nbeads), useEnsemble(false) {}
 
 };
 

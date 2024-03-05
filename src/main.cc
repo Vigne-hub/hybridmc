@@ -426,7 +426,8 @@ int main(int argc, char *argv[]) {
   write_ensemble(group_ensemble, sys);
   file.close();
   std::filesystem::rename(output_name + ".tmp", output_name);
-
+  //  Write out any frustrated states, if they exist
+  if (sys.trappedEnsemble.size() > 0) writeFrustratedConfigurations(sys, output_name);
   return 0;
 }
 

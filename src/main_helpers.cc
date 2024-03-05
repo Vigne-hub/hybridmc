@@ -11,7 +11,51 @@
 #include "main_helpers.h"
 #include "internalState.h"
 
+
 double max_time = std::numeric_limits<double>::max();
+
+std::string extractBaseName(const std::string& filename) {
+    // Find the position of the last period character
+    size_t periodPos = filename.find_last_of('.');
+    // Check if the period character is found
+    if (periodPos != std::string::npos) {
+        // Find the position of the last underscore character before the period
+        size_t underscorePos = filename.find_last_of('_', periodPos);
+        // Check if the underscore character is found
+        if (underscorePos != std::string::npos) {
+            // Extract the substring from index 0 to underscorePos
+            return filename.substr(0, underscorePos);
+        }
+    }
+    // Return an empty string if extraction fails
+    return "";
+}
+
+
+void writeFrustratedConfigurations(const System &sys, std::string h5_name)
+{
+
+    std::string base_name = extractBaseName(h5_name);
+
+    std::string untrapped_name = base_name + ".untrapped.csv";
+    std::string trapped_name = base_name + ".trapped.csv";
+    std::ofstream untrappedFile(untrapped_name, std::ios_base::app);
+    std::ofstream trappedFile(trapped_name, std::ios_base::app);
+
+    std::cout << " Writing out frustrated and trapped structure to files " << untrapped_name << " and " << trapped_name << std::endl;
+    for (size_t i = 0; i < sys.trappedEnsemble.size(); ++i){
+        DihedralState dihedrals(sys.numAtoms, sys.trappedEnsemble[i].getPositions() ); // form internal angles from Cartesian positions of configuration x
+        dihedrals.outputInternalAngles(trappedFile, true);
+    }
+    //
+    //  After replacement, none of the initial ensemble of states is trapped
+    //
+    for (size_t i = 0; i < sys.ensemble.size(); ++i){
+
+            DihedralState dihedrals(sys.numAtoms, sys.ensemble[i].getPositions() ); // form internal angles from Cartesian positions of configuration x
+            dihedrals.outputInternalAngles(untrappedFile, false);
+    }
+}
 
 double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box)
 {
@@ -37,6 +81,7 @@ double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box)
 
     std::vector<bool> trapped(sys.ensembleSize);
     sys.trappedEnsemble.clear();
+    sys.trapped.clear();
 
     std::vector<int> goodIndices;
     for (int e=0;e<sys.ensembleSize;e++){
@@ -48,12 +93,12 @@ double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box)
 
         if (trappedIndicator){
             numFails++;
-            trapped[e] = true;
             sys.trappedEnsemble.push_back(sys.ensemble[e]);
+            sys.trapped.push_back(true);
             std::cout << " Ensemble member " << e << " does not reach target." << std::endl;
         } else {
             std::cout << " Ensemble member " << e << " can flip state" << std::endl;
-            trapped[e] = false;
+            sys.trapped.push_back(false);
             goodIndices.push_back(e); // save index if not trapped
         }
 
@@ -70,19 +115,15 @@ double checkFrustration(System &sys, Random &mt, const Param &p, const Box &box)
     }
 
     if (frustration_factor > 0.0){
-        std::ofstream frustrationFile("frustration.csv");
-        std::ofstream trappedFile("traps.csv", std::ios_base::app);
+
         int s_index = 0;
         for (int e=0;e<sys.ensembleSize;e++){
-
-              DihedralState dihedrals(sys.ensemble[e]);
-              dihedrals.outputProjections(frustrationFile, trapped[e]);
-
-            if (trapped[e]){
-                dihedrals.outputProjections(trappedFile, trapped[e]);
+            if (sys.trapped[e]){
                 std::cout << " Replacing trapped state " << e << " with untrapped state " << goodIndices[s_index]
                     << std::endl;
+
                 sys.ensemble[e] = sys.ensemble[ goodIndices[s_index++] ];
+                sys.trapped[e] = false;
                 if (s_index >= (int )goodIndices.size() ) s_index = 0;
 
             }
