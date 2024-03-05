@@ -25,27 +25,30 @@ class DihedralState
         DihedralState(int numAtoms,std::vector<Vector> &pos): numDihedrals(numAtoms-3)
         {
             //std::cout << "  Constructor: DihedralState(int numAtoms,Vector *pos): numDihedrals(numAtoms-3):" << std::endl;
-            dihedrals.reserve(numAtoms-3);
-            bond_angles.reserve(numAtoms-3);
-            bond_lengths.reserve(numAtoms-3);
-            dihedralBinary.reserve(numAtoms-3);
+            dihedrals.resize(numAtoms-3);
+            bond_angles.resize(numAtoms-3);
+            bond_lengths.resize(numAtoms-3);
+            dihedralBinary.resize(numAtoms-3);
             formDihedrals(numAtoms, pos);
         }
         DihedralState(const Molecule &mol){
             int numAtoms = mol.getSize();
             numDihedrals = numAtoms-3;
-            dihedrals.reserve(numAtoms-3);
-            bond_angles.reserve(numAtoms-3);
-            bond_lengths.reserve(numAtoms-3);
-            dihedralBinary.reserve(numAtoms-3);
+            dihedrals.resize(numAtoms-3);
+            bond_angles.resize(numAtoms-3);
+            bond_lengths.resize(numAtoms-3);
+            dihedralBinary.resize(numAtoms-3);
             std::vector<Vector> pos(numAtoms);
-            std::vector<std::vector<double> > molPos = mol.getPositions(); // mmust convert to vecmat3.h format
+            std::vector<std::vector<double> > molPos = mol.getPositions(); // must convert to vecmat3.h format
+
             for (int i=0;i<numAtoms;i++) {
                 pos[i].x = molPos[i][0];
                 pos[i].y = molPos[i][1];
                 pos[i].z = molPos[i][2];
+
             }
             formDihedrals(numAtoms, pos);
+
         }
 
         DihedralState(const DihedralState& other): numDihedrals(other.numDihedrals)
@@ -257,11 +260,13 @@ class DihedralState
 
         void outputInternalAngles(std::ofstream &out, bool frustrated = false)
         {
-            for (auto bond_angle : bond_angles) out << bond_angle << ",";
 
-            for (auto dihedral : dihedrals) out << cos(M_PI*dihedral)
-                << "," << sin(M_PI*dihedral) << ",";
+            for (int i=0;i<numDihedrals;i++) out << bond_angles[i] << ",";
+
+            for (int i=0;i<numDihedrals;i++) out << cos(M_PI*dihedrals[i])
+                << "," << sin(M_PI*dihedrals[i]) << ",";
             out << frustrated << std::endl;
+
 
         }
 

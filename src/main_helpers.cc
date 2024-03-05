@@ -15,20 +15,34 @@
 double max_time = std::numeric_limits<double>::max();
 
 std::string extractBaseName(const std::string& filename) {
-    // Find the position of the last period character
-    size_t periodPos = filename.find_last_of('.');
-    // Check if the period character is found
-    if (periodPos != std::string::npos) {
-        // Find the position of the last underscore character before the period
-        size_t underscorePos = filename.find_last_of('_', periodPos);
-        // Check if the underscore character is found
+
+
+    std::string strippedFilename = "";
+    char underscore = '_';
+    int underscoreCount = std::count(filename.begin(), filename.end(), underscore);
+    if (underscoreCount == 3){
+        // Find the position of the last period character
+        size_t periodPos = filename.find_last_of('.');
+        // Check if the period character is found
+        if (periodPos != std::string::npos) {
+               strippedFilename = filename.substr(0, periodPos);
+        } else {
+            std::cout << " Filename " << filename << " not found." << std::endl;
+            std::runtime_error("Can't write renamed file.");
+        }
+    } else if (underscoreCount == 4){
+        // Find the position of the last period character
+        size_t underscorePos = filename.find_last_of(underscore);
         if (underscorePos != std::string::npos) {
-            // Extract the substring from index 0 to underscorePos
-            return filename.substr(0, underscorePos);
+               strippedFilename = filename.substr(0, underscorePos);
+        } else {
+            std::cout << " Filename " << filename << " not found." << std::endl;
+            std::runtime_error("Can't write renamed file.");
         }
     }
+
     // Return an empty string if extraction fails
-    return "";
+    return strippedFilename;
 }
 
 
@@ -43,16 +57,16 @@ void writeFrustratedConfigurations(const System &sys, std::string h5_name)
     std::ofstream trappedFile(trapped_name, std::ios_base::app);
 
     std::cout << " Writing out frustrated and trapped structure to files " << untrapped_name << " and " << trapped_name << std::endl;
+
     for (size_t i = 0; i < sys.trappedEnsemble.size(); ++i){
-        DihedralState dihedrals(sys.numAtoms, sys.trappedEnsemble[i].getPositions() ); // form internal angles from Cartesian positions of configuration x
+        DihedralState dihedrals(sys.trappedEnsemble[i]); // form internal angles from Cartesian positions of configuration x
         dihedrals.outputInternalAngles(trappedFile, true);
     }
     //
     //  After replacement, none of the initial ensemble of states is trapped
     //
     for (size_t i = 0; i < sys.ensemble.size(); ++i){
-
-            DihedralState dihedrals(sys.numAtoms, sys.ensemble[i].getPositions() ); // form internal angles from Cartesian positions of configuration x
+            DihedralState dihedrals(sys.ensemble[i]); // form internal angles from Cartesian positions of configuration x
             dihedrals.outputInternalAngles(untrappedFile, false);
     }
 }
