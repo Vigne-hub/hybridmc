@@ -220,7 +220,7 @@ all transitions in current dir, use `run_mfpt.py`. To combine the MFPT for each
 step of staircase into a single MFPT for the transition, use
 `mfpt_for_stair.py`.
 
-Again, as with the entropy, this is done automatically when run.py is executed.
+Again, as with the entropy, this is done automatically when hmc_run.py is executed.
 
 ### Calculate Energy and Folding Time
 
